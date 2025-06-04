@@ -1,0 +1,32 @@
+# Example configuration file for LangChain/LangGraph Agents
+# Copy this file and customize for your environment
+
+database:
+  neo4j_uri: "bolt://localhost:7687"
+  neo4j_username: "neo4j"
+  neo4j_password: "your-password"
+  neo4j_database: "neo4j"
+
+monitoring:
+  prometheus_url: "http://localhost:9090"
+  prometheus_auth_token: null  # Optional: Bearer token for authentication
+  alert_webhook_url: null      # Optional: Webhook for alert notifications
+
+cloud:
+  aws_region: "us-east-1"
+  aws_profile: null           # Optional: AWS profile name
+  aws_access_key_id: null     # Optional: Use AWS credentials instead of profile
+  aws_secret_access_key: null # Optional: Use AWS credentials instead of profile
+  terraform_dir: "./terraform"
+
+llm:
+  model_name: "claude-3-sonnet-20240229"
+  temperature: 0.1
+  max_tokens: 4000
+  anthropic_api_key: "your-anthropic-api-key"  # Required
+
+security:
+  secret_key: "your-secret-key-for-audit-logging"
+  enable_audit_logging: true
+  max_retry_attempts: 3
+  command_timeout: 300
