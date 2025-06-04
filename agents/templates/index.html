@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}Agent Interface - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="text-center mb-5">
+            <h1 class="display-4 mb-3">
+                <i class="bi bi-robot text-primary"></i>
+                Agent Interface
+            </h1>
+            <p class="lead text-muted">
+                Interact with LangChain/LangGraph agents for infrastructure management
+            </p>
+        </div>
+
+        <!-- System Health Status -->
+        {% if health_status %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-heart-pulse"></i>
+                    System Health
+                    <span class="status-indicator status-{{ health_status.status }}"></span>
+                    <span class="badge bg-{{ 'success' if health_status.status == 'healthy' else 'warning' if health_status.status == 'degraded' else 'danger' }}">
+                        {{ health_status.status.title() }}
+                    </span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for agent_name, agent_health in health_status.agents.items() %}
+                    <div class="col-md-4 mb-2">
+                        <div class="d-flex align-items-center">
+                            <span class="status-indicator status-{{ agent_health.status }}"></span>
+                            <strong>{{ agent_name.title() }}</strong>
+                            {% if agent_health.tool_count %}
+                                <small class="text-muted ms-2">({{ agent_health.tool_count }} tools)</small>
+                            {% endif %}
+                        </div>
+                        {% if agent_health.error %}
+                            <small class="text-danger">{{ agent_health.error }}</small>
+                        {% else %}
+                            <small class="text-muted">{{ agent_health.message }}</small>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Query Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-chat-dots"></i>
+                    Quick Query
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('form_query') }}" method="post" data-loading>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="agent" class="form-label">Select Agent</label>
+                            <select class="form-select" id="agent" name="agent" required>
+                                <option value="">Choose agent...</option>
+                                {% for agent_name, agent_info in agents.items() %}
+                                <option value="{{ agent_name }}">{{ agent_name.title() }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="query" class="form-label">Query</label>
+                            <input type="text" class="form-control" id="query" name="query" 
+                                   placeholder="Enter your query..." required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="context" class="form-label">Context (JSON) <small class="text-muted">Optional</small></label>
+                        <textarea class="form-control" id="context" name="context" rows="3" 
+                                  placeholder='{"key": "value"}'></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-play-circle"></i>
+                        Execute Query
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Available Agents -->
+        <div class="row">
+            {% for agent_name, agent_info in agents.items() %}
+            <div class="col-md-6 mb-4">
+                <div class="card agent-card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            {% if agent_name == 'prometheus' %}
+                                <i class="bi bi-graph-up text-warning"></i>
+                            {% elif agent_name == 'neo4j' %}
+                                <i class="bi bi-diagram-3 text-info"></i>
+                            {% elif agent_name == 'infrastructure' %}
+                                <i class="bi bi-cloud text-success"></i>
+                            {% endif %}
+                            {{ agent_name.title() }}
+                        </h5>
+                        {% if health_status and health_status.agents.get(agent_name) %}
+                            {% set agent_health = health_status.agents[agent_name] %}
+                            <span class="badge health-badge bg-{{ 'success' if agent_health.status == 'healthy' else 'warning' if agent_health.status == 'degraded' else 'danger' }}">
+                                {{ agent_health.status }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">{{ agent_info.description }}</p>
+                        
+                        <h6 class="mb-2">Capabilities:</h6>
+                        <ul class="list-unstyled">
+                            {% for capability in agent_info.capabilities %}
+                            <li><i class="bi bi-check-circle-fill text-success me-2"></i>{{ capability }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <div class="card-footer">
+                        <a href="{{ url_for('agent_page', agent_name=agent_name) }}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-right-circle"></i>
+                            Interact with {{ agent_name.title() }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Example Queries -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i>
+                    Example Queries
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6 class="text-warning">
+                            <i class="bi bi-graph-up"></i>
+                            Prometheus
+                        </h6>
+                        <ul class="list-unstyled small">
+                            <li>• Check CPU usage for the last hour</li>
+                            <li>• Show memory utilization by service</li>
+                            <li>• List active alerts</li>
+                            <li>• Monitor disk space usage</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-info">
+                            <i class="bi bi-diagram-3"></i>
+                            Neo4j
+                        </h6>
+                        <ul class="list-unstyled small">
+                            <li>• Find all nodes connected to Person 'John'</li>
+                            <li>• Show database schema</li>
+                            <li>• Count nodes by type</li>
+                            <li>• Find shortest path between two nodes</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-success">
+                            <i class="bi bi-cloud"></i>
+                            Infrastructure
+                        </h6>
+                        <ul class="list-unstyled small">
+                            <li>• List all running EC2 instances</li>
+                            <li>• Show S3 bucket contents</li>
+                            <li>• Check CloudFormation stack status</li>
+                            <li>• Run Terraform plan</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Copy Toast Notification -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="copyToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="bi bi-clipboard-check text-success me-2"></i>
+            <strong class="me-auto">Copied!</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            Content copied to clipboard.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Pre-fill quick query form when clicking examples
+document.addEventListener('DOMContentLoaded', function() {
+    const exampleQueries = {
+        'prometheus': [
+            'Check CPU usage for the last hour',
+            'Show memory utilization by service',
+            'List active alerts',
+            'Monitor disk space usage'
+        ],
+        'neo4j': [
+            'Find all nodes connected to Person "John"',
+            'Show database schema',
+            'Count nodes by type',
+            'Find shortest path between two nodes'
+        ],
+        'infrastructure': [
+            'List all running EC2 instances',
+            'Show S3 bucket contents',
+            'Check CloudFormation stack status',
+            'Run Terraform plan'
+        ]
+    };
+
+    // Add click handlers to example queries
+    document.querySelectorAll('.list-unstyled li').forEach(li => {
+        if (li.textContent.trim().startsWith('•')) {
+            li.style.cursor = 'pointer';
+            li.addEventListener('click', function() {
+                const queryText = li.textContent.replace('•', '').trim();
+                const agentSection = li.closest('.col-md-4');
+                let agentName = '';
+                
+                if (agentSection.querySelector('.text-warning')) {
+                    agentName = 'prometheus';
+                } else if (agentSection.querySelector('.text-info')) {
+                    agentName = 'neo4j';
+                } else if (agentSection.querySelector('.text-success')) {
+                    agentName = 'infrastructure';
+                }
+                
+                // Fill the quick query form
+                document.getElementById('agent').value = agentName;
+                document.getElementById('query').value = queryText;
+                
+                // Scroll to form
+                document.querySelector('.card:nth-of-type(2)').scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

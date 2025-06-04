@@ -6,11 +6,15 @@ database:
   neo4j_username: "neo4j"
   neo4j_password: "your-password"
   neo4j_database: "neo4j"
+  neo4j_mcp_url: "http://localhost:8001/mcp"
+  neo4j_mcp_transport: "streamable_http"
 
 monitoring:
   prometheus_url: "http://localhost:9090"
   prometheus_auth_token: null  # Optional: Bearer token for authentication
   alert_webhook_url: null      # Optional: Webhook for alert notifications
+  prometheus_mcp_url: "http://localhost:8000/mcp"
+  prometheus_mcp_transport: "streamable_http"
 
 cloud:
   aws_region: "us-east-1"
@@ -20,10 +24,12 @@ cloud:
   terraform_dir: "./terraform"
 
 llm:
-  model_name: "claude-3-sonnet-20240229"
+  provider: "openai"                           # "openai" or "anthropic"
+  model_name: "gpt-3.5-turbo"                 # OpenAI: gpt-3.5-turbo, gpt-4, etc. | Anthropic: claude-3-sonnet-20240229, etc.
   temperature: 0.1
   max_tokens: 4000
-  anthropic_api_key: "your-anthropic-api-key"  # Required
+  openai_api_key: "your-openai-api-key"       # Required for OpenAI provider
+  anthropic_api_key: "your-anthropic-api-key" # Required for Anthropic provider
 
 security:
   secret_key: "your-secret-key-for-audit-logging"

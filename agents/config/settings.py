@@ -13,11 +13,15 @@ class DatabaseConfig(BaseModel):
     neo4j_username: str = Field(default=os.getenv("NEO4J_USERNAME", "neo4j"))
     neo4j_password: str = Field(default=os.getenv("NEO4J_PASSWORD", "password"))
     neo4j_database: str = Field(default=os.getenv("NEO4J_DATABASE", "neo4j"))
+    neo4j_mcp_url: str = Field(default=os.getenv("NEO4J_MCP_URL", "http://localhost:8001/mcp"))
+    neo4j_mcp_transport: str = Field(default=os.getenv("NEO4J_MCP_TRANSPORT", "streamable_http"))
 
 class MonitoringConfig(BaseModel):
     prometheus_url: str = Field(default=os.getenv("PROMETHEUS_URL", "http://localhost:9090"))
     prometheus_auth_token: Optional[str] = Field(default=os.getenv("PROMETHEUS_AUTH_TOKEN"))
     alert_webhook_url: Optional[str] = Field(default=os.getenv("ALERT_WEBHOOK_URL"))
+    prometheus_mcp_url: str = Field(default=os.getenv("PROMETHEUS_MCP_URL", "http://localhost:8000/mcp"))
+    prometheus_mcp_transport: str = Field(default=os.getenv("PROMETHEUS_MCP_TRANSPORT", "streamable_http"))
 
 class CloudConfig(BaseModel):
     aws_region: str = Field(default=os.getenv("AWS_REGION", "us-east-1"))
@@ -27,10 +31,12 @@ class CloudConfig(BaseModel):
     terraform_dir: str = Field(default=os.getenv("TERRAFORM_DIR", "./terraform"))
 
 class LLMConfig(BaseModel):
-    model_name: str = Field(default=os.getenv("LLM_MODEL", "claude-3-sonnet-20240229"))
+    model_name: str = Field(default=os.getenv("LLM_MODEL", "gpt-3.5-turbo"))
     temperature: float = Field(default=float(os.getenv("LLM_TEMPERATURE", "0.1")))
     max_tokens: int = Field(default=int(os.getenv("LLM_MAX_TOKENS", "4000")))
+    provider: str = Field(default=os.getenv("LLM_PROVIDER", "openai"))  # "openai" or "anthropic"
     anthropic_api_key: Optional[str] = Field(default=os.getenv("ANTHROPIC_API_KEY"))
+    openai_api_key: Optional[str] = Field(default=os.getenv("OPENAI_API_KEY"))
 
 class SecurityConfig(BaseModel):
     secret_key: str = Field(default=os.getenv("AGENT_SECRET_KEY", "default-secret-key"))
@@ -68,9 +74,13 @@ class GlobalConfig(BaseModel):
         """Validate configuration and return any issues."""
         issues = []
         
-        # Check required API keys
-        if not self.llm.anthropic_api_key:
-            issues.append("ANTHROPIC_API_KEY is not set")
+        # Check required API keys based on provider
+        if self.llm.provider == "openai" and not self.llm.openai_api_key:
+            issues.append("OPENAI_API_KEY is not set for OpenAI provider")
+        elif self.llm.provider == "anthropic" and not self.llm.anthropic_api_key:
+            issues.append("ANTHROPIC_API_KEY is not set for Anthropic provider")
+        elif self.llm.provider not in ["openai", "anthropic"]:
+            issues.append(f"Invalid LLM provider: {self.llm.provider}. Must be 'openai' or 'anthropic'")
         
         # Check database connectivity requirements
         if not all([self.database.neo4j_uri, self.database.neo4j_username, self.database.neo4j_password]):

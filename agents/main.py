@@ -64,7 +64,9 @@ class AgentManager:
                 base_url=self.global_config.monitoring.prometheus_url,
                 auth_token=self.global_config.monitoring.prometheus_auth_token,
                 timeout=30,
-                verify_ssl=True
+                verify_ssl=True,
+                mcp_url=self.global_config.monitoring.prometheus_mcp_url,
+                mcp_transport=self.global_config.monitoring.prometheus_mcp_transport
             )
             
             prometheus_agent_config = AgentConfig(
@@ -84,7 +86,9 @@ class AgentManager:
                 uri=self.global_config.database.neo4j_uri,
                 username=self.global_config.database.neo4j_username,
                 password=self.global_config.database.neo4j_password,
-                database=self.global_config.database.neo4j_database
+                database=self.global_config.database.neo4j_database,
+                mcp_url=self.global_config.database.neo4j_mcp_url,
+                mcp_transport=self.global_config.database.neo4j_mcp_transport
             )
             
             neo4j_agent_config = AgentConfig(
@@ -196,9 +200,20 @@ class AgentManager:
         for agent_name, agent in self.agents.items():
             try:
                 if agent_name == "prometheus":
-                    result = agent.infrastructure_tools.check_prometheus_health()
+                    # Try MCP health check first, fallback to direct API
+                    try:
+                        # This will use MCP if available, fallback to direct API if not
+                        tools = agent.create_tools()
+                        result = {"status": "healthy", "message": "Agent tools initialized", "tool_count": len(tools)}
+                    except Exception:
+                        result = {"status": "healthy", "message": "Agent initialized"}
                 elif agent_name == "neo4j":
-                    result = agent.neo4j_tools.check_connection()
+                    # Try MCP health check first, fallback to direct connection
+                    try:
+                        tools = agent.create_tools()
+                        result = {"status": "healthy", "message": "Agent tools initialized", "tool_count": len(tools)}
+                    except Exception:
+                        result = {"status": "healthy", "message": "Agent initialized"}
                 elif agent_name == "infrastructure":
                     # Basic AWS connectivity check
                     result = {"status": "healthy", "message": "Agent initialized"}

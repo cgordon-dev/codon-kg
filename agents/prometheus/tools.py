@@ -14,6 +14,8 @@ class PrometheusConfig(BaseModel):
     timeout: int = Field(default=30, description="Request timeout in seconds")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
     auth_token: Optional[str] = Field(default=None, description="Authentication token")
+    mcp_url: str = Field(default="http://localhost:8000/mcp", description="Prometheus MCP server URL")
+    mcp_transport: str = Field(default="streamable_http", description="MCP transport protocol")
 
 class MetricQuery(BaseModel):
     query: str = Field(..., description="PromQL query")

@@ -16,6 +16,8 @@ class Neo4jConfig(BaseModel):
     max_connection_lifetime: int = Field(default=3600, description="Max connection lifetime in seconds")
     max_connection_pool_size: int = Field(default=50, description="Max connection pool size")
     connection_timeout: int = Field(default=30, description="Connection timeout in seconds")
+    mcp_url: str = Field(default="http://localhost:8001/mcp", description="Neo4j MCP server URL")
+    mcp_transport: str = Field(default="streamable_http", description="MCP transport protocol")
 
 class CypherQuery(BaseModel):
     query: str = Field(..., description="Cypher query string")

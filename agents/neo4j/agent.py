@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from langchain_anthropic import ChatAnthropic
+import asyncio
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
@@ -8,38 +8,73 @@ import structlog
 import json
 
 from ..shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
-from .tools import Neo4jTools, Neo4jConfig
+from ..shared.mcp_client import create_mcp_client
+from ..shared.llm_factory import LLMFactory
+from ..config.settings import get_config
+from .tools import Neo4jConfig
 
 logger = structlog.get_logger(__name__)
 
 class Neo4jAgent(BaseAgent):
     def __init__(self, config: AgentConfig, neo4j_config: Neo4jConfig):
         super().__init__(config)
-        self.neo4j_tools = Neo4jTools(neo4j_config)
-        self.model = ChatAnthropic(
-            model_name=config.model_name,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
+        self.neo4j_config = neo4j_config
+        self.mcp_client = create_mcp_client(
+            prometheus_config={},  # Not used in Neo4j agent
+            neo4j_config={
+                "url": neo4j_config.mcp_url,
+                "transport": neo4j_config.mcp_transport
+            }
         )
+        global_config = get_config()
+        self.model = LLMFactory.create_llm(global_config.llm)
+        self._mcp_tools = None
     
     def __del__(self):
-        if hasattr(self, 'neo4j_tools'):
-            self.neo4j_tools.close()
+        if hasattr(self, 'mcp_client'):
+            try:
+                asyncio.run(self.mcp_client.close())
+            except Exception:
+                pass
+    
+    async def get_mcp_tools(self) -> List[Any]:
+        """Get Neo4j tools from MCP server."""
+        if not self._mcp_tools:
+            await self.mcp_client.initialize()
+            self._mcp_tools = await self.mcp_client.get_neo4j_tools()
+        return self._mcp_tools
     
     def create_tools(self) -> List[Any]:
+        """Create tools using MCP client."""
+        try:
+            # Get MCP tools asynchronously
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're in an async context, create a new event loop
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self.get_mcp_tools())
+                    mcp_tools = future.result()
+            else:
+                mcp_tools = loop.run_until_complete(self.get_mcp_tools())
+            
+            logger.info("Retrieved Neo4j MCP tools", tool_count=len(mcp_tools))
+            return mcp_tools
+            
+        except Exception as e:
+            logger.error("Failed to get MCP tools, falling back to legacy implementation", error=str(e))
+            # Fallback to original implementation if MCP fails
+            return self._create_fallback_tools()
+    
+    def _create_fallback_tools(self) -> List[Any]:
+        """Fallback tools implementation if MCP is unavailable."""
+        from .tools import Neo4jTools
+        
+        neo4j_tools = Neo4jTools(self.neo4j_config)
+        
         @tool
         def execute_cypher_query(query: str, parameters: str = None, read_only: bool = True) -> str:
-            """
-            Execute a Cypher query against the Neo4j knowledge graph.
-            
-            Args:
-                query: Cypher query string (e.g., 'MATCH (n:Person) RETURN n.name LIMIT 10')
-                parameters: JSON string of query parameters (optional)
-                read_only: Whether the query is read-only (default: True)
-            
-            Returns:
-                JSON string with query results and metadata
-            """
+            """Execute a Cypher query against the Neo4j knowledge graph."""
             try:
                 params = json.loads(parameters) if parameters else {}
             except json.JSONDecodeError:
@@ -48,44 +83,24 @@ class Neo4jAgent(BaseAgent):
                     "error": "Invalid JSON parameters"
                 })
             
-            result = self.neo4j_tools.execute_cypher(query, params, read_only)
+            result = neo4j_tools.execute_cypher(query, params, read_only)
             return json.dumps(result, default=str)
         
         @tool
         def check_neo4j_connection() -> str:
-            """
-            Check if Neo4j database connection is healthy and responsive.
-            
-            Returns:
-                JSON string with connection status and details
-            """
-            result = self.neo4j_tools.check_connection()
+            """Check if Neo4j database connection is healthy and responsive."""
+            result = neo4j_tools.check_connection()
             return json.dumps(result, default=str)
         
         @tool
         def get_database_schema() -> str:
-            """
-            Retrieve the Neo4j database schema including node labels, relationships, and properties.
-            
-            Returns:
-                JSON string with schema information
-            """
-            result = self.neo4j_tools.get_schema_info()
+            """Retrieve the Neo4j database schema including node labels, relationships, and properties."""
+            result = neo4j_tools.get_schema_info()
             return json.dumps(result, default=str)
         
         @tool
         def search_nodes_by_properties(label: str = None, properties: str = None, limit: int = 100) -> str:
-            """
-            Search for nodes in the knowledge graph by label and/or properties.
-            
-            Args:
-                label: Node label to filter by (optional)
-                properties: JSON string of properties to match (optional)
-                limit: Maximum number of nodes to return (default: 100)
-            
-            Returns:
-                JSON string with matching nodes and their properties
-            """
+            """Search for nodes in the knowledge graph by label and/or properties."""
             try:
                 props = json.loads(properties) if properties else None
             except json.JSONDecodeError:
@@ -94,24 +109,13 @@ class Neo4jAgent(BaseAgent):
                     "error": "Invalid JSON properties"
                 })
             
-            result = self.neo4j_tools.search_nodes(label, props, limit)
+            result = neo4j_tools.search_nodes(label, props, limit)
             return json.dumps(result, default=str)
         
         @tool
         def find_shortest_path_between_nodes(start_properties: str, end_properties: str, 
                                            relationship_types: str = None, max_depth: int = 6) -> str:
-            """
-            Find the shortest path between two nodes in the knowledge graph.
-            
-            Args:
-                start_properties: JSON string of properties to identify start node
-                end_properties: JSON string of properties to identify end node
-                relationship_types: JSON array of relationship types to consider (optional)
-                max_depth: Maximum path depth to search (default: 6)
-            
-            Returns:
-                JSON string with shortest paths and their details
-            """
+            """Find the shortest path between two nodes in the knowledge graph."""
             try:
                 start_props = json.loads(start_properties)
                 end_props = json.loads(end_properties)
@@ -122,7 +126,7 @@ class Neo4jAgent(BaseAgent):
                     "error": "Invalid JSON in parameters"
                 })
             
-            result = self.neo4j_tools.find_shortest_path(start_props, end_props, rel_types, max_depth)
+            result = neo4j_tools.find_shortest_path(start_props, end_props, rel_types, max_depth)
             return json.dumps(result, default=str)
         
         return [

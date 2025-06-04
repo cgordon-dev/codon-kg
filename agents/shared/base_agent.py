@@ -17,7 +17,7 @@ class BaseAgentState(TypedDict):
 
 class AgentConfig(BaseModel):
     name: str = Field(..., description="Agent name")
-    model_name: str = Field(default="claude-3-sonnet-20240229", description="LLM model")
+    model_name: str = Field(default="gpt-3.5-turbo", description="LLM model")
     temperature: float = Field(default=0.1, description="Model temperature")
     max_tokens: int = Field(default=4000, description="Max tokens per response")
     timeout: int = Field(default=300, description="Timeout in seconds")

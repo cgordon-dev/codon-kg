@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}{{ agent_name.title() }} Agent{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <!-- Agent Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-2">
+                    {% if agent_name == 'prometheus' %}
+                        <i class="bi bi-graph-up text-warning"></i>
+                    {% elif agent_name == 'neo4j' %}
+                        <i class="bi bi-diagram-3 text-info"></i>
+                    {% elif agent_name == 'infrastructure' %}
+                        <i class="bi bi-cloud text-success"></i>
+                    {% endif %}
+                    {{ agent_name.title() }} Agent
+                </h1>
+                <p class="text-muted mb-0">{{ agent_info.description }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Home
+                </a>
+            </div>
+        </div>
+
+        <!-- Agent Health Status -->
+        {% if agent_health %}
+        <div class="alert alert-{{ 'success' if agent_health.status == 'healthy' else 'warning' if agent_health.status == 'degraded' else 'danger' }}" role="alert">
+            <div class="d-flex align-items-center">
+                <span class="status-indicator status-{{ agent_health.status }}"></span>
+                <strong>Agent Status: {{ agent_health.status.title() }}</strong>
+                {% if agent_health.tool_count %}
+                    <span class="ms-2 badge bg-secondary">{{ agent_health.tool_count }} tools available</span>
+                {% endif %}
+            </div>
+            {% if agent_health.message %}
+                <small class="d-block mt-1">{{ agent_health.message }}</small>
+            {% endif %}
+            {% if agent_health.error %}
+                <small class="d-block mt-1 text-danger">Error: {{ agent_health.error }}</small>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <!-- Query Form -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-chat-dots"></i>
+                            Execute Query
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="{{ url_for('form_query') }}" method="post" data-loading>
+                            <input type="hidden" name="agent" value="{{ agent_name }}">
+                            
+                            <div class="mb-3">
+                                <label for="query" class="form-label">Query</label>
+                                <textarea class="form-control" id="query" name="query" rows="4" 
+                                          placeholder="Enter your query for the {{ agent_name }} agent..." 
+                                          required>{{ last_query or '' }}</textarea>
+                                <div class="form-text">
+                                    Ask the agent to perform tasks based on its capabilities.
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="context" class="form-label">
+                                    Context (JSON) 
+                                    <small class="text-muted">Optional</small>
+                                </label>
+                                <textarea class="form-control" id="context" name="context" rows="3" 
+                                          placeholder='{"key": "value"}'>{{ last_context or '' }}</textarea>
+                                <div class="form-text">
+                                    Provide additional context as JSON key-value pairs.
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-play-circle"></i>
+                                Execute Query
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Agent Capabilities -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-list-check"></i>
+                            Capabilities
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            {% for capability in agent_info.capabilities %}
+                            <li class="mb-2">
+                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                {{ capability }}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Query Result -->
+            <div class="col-lg-6">
+                {% if query_result %}
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-terminal"></i>
+                            Query Result
+                        </h5>
+                        <div>
+                            <span class="badge bg-{{ 'success' if query_result.status == 'success' else 'danger' }}">
+                                {{ query_result.status.title() }}
+                            </span>
+                            <button class="btn btn-sm btn-outline-secondary ms-2" 
+                                    onclick="copyToClipboard(document.getElementById('result-content').textContent)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body query-result">
+                        <div id="result-content" class="code-output">{{ query_result | tojson(indent=2) }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Example Queries -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-lightbulb"></i>
+                            Example Queries
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        {% if agent_name == 'prometheus' %}
+                        <div class="mb-3">
+                            <h6 class="text-warning">Monitoring & Metrics</h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-warning btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Check CPU usage for the last hour
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Show memory utilization by service
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    List all active alerts
+                                </button>
+                                <button class="btn btn-outline-warning btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Monitor disk space usage across nodes
+                                </button>
+                            </div>
+                        </div>
+                        {% elif agent_name == 'neo4j' %}
+                        <div class="mb-3">
+                            <h6 class="text-info">Graph Queries</h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-info btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Show database schema and node types
+                                </button>
+                                <button class="btn btn-outline-info btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Count all nodes by label
+                                </button>
+                                <button class="btn btn-outline-info btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Find nodes with the most relationships
+                                </button>
+                                <button class="btn btn-outline-info btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    List all relationship types
+                                </button>
+                            </div>
+                        </div>
+                        {% elif agent_name == 'infrastructure' %}
+                        <div class="mb-3">
+                            <h6 class="text-success">AWS & Terraform</h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-success btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    List all running EC2 instances
+                                </button>
+                                <button class="btn btn-outline-success btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Show S3 buckets and their sizes
+                                </button>
+                                <button class="btn btn-outline-success btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Check CloudFormation stack status
+                                </button>
+                                <button class="btn btn-outline-success btn-sm text-start" onclick="fillQuery(this.textContent)">
+                                    Run Terraform plan to preview changes
+                                </button>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="alert alert-info mb-0" role="alert">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Tip:</strong> Click any example query above to automatically fill the query form.
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- API Integration Example -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-code-slash"></i>
+                    API Integration
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>You can also interact with this agent programmatically using the REST API:</p>
+                <div class="code-output">
+<code>curl -X POST http://localhost:5000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "{{ agent_name }}",
+    "query": "Your query here",
+    "context": {}
+  }'</code>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary mt-2" 
+                        onclick="copyToClipboard(this.previousElementSibling.textContent)">
+                    <i class="bi bi-clipboard"></i> Copy cURL Command
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Copy Toast Notification -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="copyToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="bi bi-clipboard-check text-success me-2"></i>
+            <strong class="me-auto">Copied!</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            Content copied to clipboard.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function fillQuery(queryText) {
+    document.getElementById('query').value = queryText.trim();
+    document.getElementById('query').focus();
+}
+
+// Format JSON in result display
+document.addEventListener('DOMContentLoaded', function() {
+    const resultContent = document.getElementById('result-content');
+    if (resultContent) {
+        try {
+            const jsonData = JSON.parse(resultContent.textContent);
+            resultContent.textContent = JSON.stringify(jsonData, null, 2);
+        } catch (e) {
+            // Content is not JSON, leave as is
+        }
+    }
+});
+
+// Auto-resize textareas
+document.addEventListener('DOMContentLoaded', function() {
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,5 +1,4 @@
 from typing import List, Dict, Any
-from langchain_anthropic import ChatAnthropic
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.prebuilt import create_react_agent
@@ -8,6 +7,8 @@ import structlog
 import json
 
 from ..shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
+from ..shared.llm_factory import LLMFactory
+from ..config.settings import get_config
 from .tools import InfrastructureTools, AWSConfig, TerraformConfig
 
 logger = structlog.get_logger(__name__)
@@ -16,11 +17,8 @@ class InfrastructureAgent(BaseAgent):
     def __init__(self, config: AgentConfig, aws_config: AWSConfig, terraform_config: TerraformConfig):
         super().__init__(config)
         self.infrastructure_tools = InfrastructureTools(aws_config, terraform_config)
-        self.model = ChatAnthropic(
-            model_name=config.model_name,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens
-        )
+        global_config = get_config()
+        self.model = LLMFactory.create_llm(global_config.llm)
     
     def create_tools(self) -> List[Any]:
         @tool
