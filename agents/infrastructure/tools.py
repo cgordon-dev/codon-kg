@@ -6,10 +6,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
+# Defer boto3 import to avoid AWS profile errors at module load
 
-from ..shared.security import audit_log, require_security_check
+from shared.security import audit_log, require_security_check
 
 logger = structlog.get_logger(__name__)
 
@@ -35,6 +34,10 @@ class InfrastructureTools:
     
     def _setup_aws_session(self):
         try:
+            # Import boto3 here to avoid module-level AWS config loading
+            import boto3
+            from botocore.exceptions import ClientError, NoCredentialsError
+            
             session_kwargs = {"region_name": self.aws_config.region}
             
             if self.aws_config.profile:

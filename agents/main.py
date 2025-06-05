@@ -17,17 +17,28 @@ import argparse
 import asyncio
 import json
 import sys
+import os
 from typing import Dict, Any, Optional
 import structlog
 
+# Add current directory to Python path to resolve module imports
+sys.path.append(os.path.dirname(__file__))
+
 from config.settings import get_config, reload_config
 from shared.base_agent import AgentConfig
+
 from prometheus.agent import PrometheusAgent
 from prometheus.tools import PrometheusConfig
-from neo4j.agent import Neo4jAgent
-from neo4j.tools import Neo4jConfig
-from infrastructure.agent import InfrastructureAgent
-from infrastructure.tools import AWSConfig, TerraformConfig
+from neo4j_agent.agent import Neo4jAgent
+from neo4j_agent.tools import Neo4jConfig
+# Import infrastructure agent conditionally to avoid AWS config issues
+try:
+    from infrastructure.agent import InfrastructureAgent
+    from infrastructure.tools import AWSConfig, TerraformConfig
+    INFRASTRUCTURE_AVAILABLE = True
+except Exception as e:
+    print(f"Infrastructure agent not available: {e}")
+    INFRASTRUCTURE_AVAILABLE = False
 
 # Configure structured logging
 structlog.configure(
@@ -103,32 +114,41 @@ class AgentManager:
             self.agents["neo4j"] = Neo4jAgent(neo4j_agent_config, neo4j_config)
             logger.info("Neo4j agent initialized")
             
-            # Infrastructure Agent
-            aws_config = AWSConfig(
-                region=self.global_config.cloud.aws_region,
-                profile=self.global_config.cloud.aws_profile,
-                access_key_id=self.global_config.cloud.aws_access_key_id,
-                secret_access_key=self.global_config.cloud.aws_secret_access_key
-            )
-            
-            terraform_config = TerraformConfig(
-                working_directory=self.global_config.cloud.terraform_dir,
-                auto_approve=False  # Safety first
-            )
-            
-            infrastructure_agent_config = AgentConfig(
-                name="infrastructure_agent",
-                model_name=self.global_config.llm.model_name,
-                temperature=self.global_config.llm.temperature,
-                max_tokens=self.global_config.llm.max_tokens,
-                max_retries=self.global_config.security.max_retry_attempts,
-                system_prompt="You are an infrastructure management specialist."
-            )
-            
-            self.agents["infrastructure"] = InfrastructureAgent(
-                infrastructure_agent_config, aws_config, terraform_config
-            )
-            logger.info("Infrastructure agent initialized")
+            # Infrastructure Agent (conditional - only if AWS is properly configured)
+            if INFRASTRUCTURE_AVAILABLE and (
+                self.global_config.cloud.aws_access_key_id or 
+                self.global_config.cloud.aws_profile
+            ):
+                try:
+                    aws_config = AWSConfig(
+                        region=self.global_config.cloud.aws_region,
+                        profile=self.global_config.cloud.aws_profile,
+                        access_key_id=self.global_config.cloud.aws_access_key_id,
+                        secret_access_key=self.global_config.cloud.aws_secret_access_key
+                    )
+                    
+                    terraform_config = TerraformConfig(
+                        working_directory=self.global_config.cloud.terraform_dir,
+                        auto_approve=False  # Safety first
+                    )
+                    
+                    infrastructure_agent_config = AgentConfig(
+                        name="infrastructure_agent",
+                        model_name=self.global_config.llm.model_name,
+                        temperature=self.global_config.llm.temperature,
+                        max_tokens=self.global_config.llm.max_tokens,
+                        max_retries=self.global_config.security.max_retry_attempts,
+                        system_prompt="You are an infrastructure management specialist."
+                    )
+                    
+                    self.agents["infrastructure"] = InfrastructureAgent(
+                        infrastructure_agent_config, aws_config, terraform_config
+                    )
+                    logger.info("Infrastructure agent initialized")
+                except Exception as e:
+                    logger.warning("Failed to initialize infrastructure agent", error=str(e))
+            else:
+                logger.info("Infrastructure agent disabled - no AWS credentials configured")
             
         except Exception as e:
             logger.error("Failed to initialize agents", error=str(e))

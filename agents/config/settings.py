@@ -38,6 +38,14 @@ class LLMConfig(BaseModel):
     anthropic_api_key: Optional[str] = Field(default=os.getenv("ANTHROPIC_API_KEY"))
     openai_api_key: Optional[str] = Field(default=os.getenv("OPENAI_API_KEY"))
 
+class LangSmithConfig(BaseModel):
+    enabled: bool = Field(default=os.getenv("LANGSMITH_ENABLED", "false").lower() == "true")
+    api_key: Optional[str] = Field(default=os.getenv("LANGSMITH_API_KEY"))
+    project: str = Field(default=os.getenv("LANGSMITH_PROJECT", "codon-kg-agents"))
+    endpoint: str = Field(default=os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"))
+    tracing: bool = Field(default=os.getenv("LANGSMITH_TRACING", "true").lower() == "true")
+    session_name: Optional[str] = Field(default=os.getenv("LANGSMITH_SESSION"))
+
 class SecurityConfig(BaseModel):
     secret_key: str = Field(default=os.getenv("AGENT_SECRET_KEY", "default-secret-key"))
     enable_audit_logging: bool = Field(default=os.getenv("ENABLE_AUDIT_LOGGING", "true").lower() == "true")
@@ -49,6 +57,7 @@ class GlobalConfig(BaseModel):
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     cloud: CloudConfig = Field(default_factory=CloudConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    langsmith: LangSmithConfig = Field(default_factory=LangSmithConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     
     @classmethod
@@ -81,6 +90,10 @@ class GlobalConfig(BaseModel):
             issues.append("ANTHROPIC_API_KEY is not set for Anthropic provider")
         elif self.llm.provider not in ["openai", "anthropic"]:
             issues.append(f"Invalid LLM provider: {self.llm.provider}. Must be 'openai' or 'anthropic'")
+        
+        # Check LangSmith configuration
+        if self.langsmith.enabled and not self.langsmith.api_key:
+            issues.append("LANGSMITH_API_KEY is not set but LangSmith is enabled")
         
         # Check database connectivity requirements
         if not all([self.database.neo4j_uri, self.database.neo4j_username, self.database.neo4j_password]):

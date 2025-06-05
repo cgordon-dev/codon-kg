@@ -6,9 +6,9 @@ from langgraph.graph import StateGraph, START, END
 import structlog
 import json
 
-from ..shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
-from ..shared.llm_factory import LLMFactory
-from ..config.settings import get_config
+from shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
+from shared.llm_factory import LLMFactory
+from config.settings import get_config
 from .tools import InfrastructureTools, AWSConfig, TerraformConfig
 
 logger = structlog.get_logger(__name__)
@@ -18,7 +18,7 @@ class InfrastructureAgent(BaseAgent):
         super().__init__(config)
         self.infrastructure_tools = InfrastructureTools(aws_config, terraform_config)
         global_config = get_config()
-        self.model = LLMFactory.create_llm(global_config.llm)
+        self.model = LLMFactory.create_llm(global_config.llm, global_config.langsmith)
     
     def create_tools(self) -> List[Any]:
         @tool

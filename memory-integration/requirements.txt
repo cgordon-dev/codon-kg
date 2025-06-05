@@ -1,0 +1,26 @@
+# Memory Integration Requirements
+# Dependencies for mcp-mem0 LangGraph integration
+
+# Core LangGraph and LangChain packages
+langgraph
+langchain
+langchain-core
+langchain-community
+langchain-openai
+langchain-anthropic
+langchain-mcp-adapters
+
+# Memory and database
+mem0ai
+psycopg2-binary
+sqlalchemy
+
+# Utilities
+pydantic
+python-dotenv
+asyncio-mqtt
+structlog
+
+# Optional: For enhanced functionality
+numpy
+pandas

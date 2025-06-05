@@ -1,0 +1,52 @@
+# Docker Compose Override for Development
+# This file provides development-specific overrides
+
+version: '3.8'
+
+services:
+  # Development overrides for agent-web
+  agent-web:
+    volumes:
+      # Mount source code for hot reload during development
+      - ./agents:/app:rw
+      - ./terraform:/app/terraform:rw
+    environment:
+      # Enable Flask debug mode
+      FLASK_DEBUG: true
+      FLASK_ENV: development
+    command: ["python", "app.py", "--host", "0.0.0.0", "--port", "5000", "--debug"]
+
+  # Development overrides for MCP servers
+  neo4j-mcp:
+    volumes:
+      - ./mcp_servers:/app:rw
+    environment:
+      PYTHONUNBUFFERED: 1
+
+  prometheus-mcp:
+    volumes:
+      - ./mcp_servers:/app:rw
+    environment:
+      PYTHONUNBUFFERED: 1
+
+  # Additional development tools
+  neo4j:
+    environment:
+      # Enable additional debugging
+      NEO4J_dbms_logs_debug_level: INFO
+    volumes:
+      # Add custom Neo4j configuration
+      - ./docker/neo4j/conf:/conf:ro
+
+  prometheus:
+    volumes:
+      # Mount custom Prometheus config for development
+      - ./docker/prometheus:/etc/prometheus:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'  # Enable admin API for development

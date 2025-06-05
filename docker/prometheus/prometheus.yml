@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Neo4j metrics not available in Community edition
+  # Would need Neo4j Enterprise edition for Prometheus metrics
+  # - job_name: 'neo4j'
+  #   static_configs:
+  #     - targets: ['neo4j:2004']
+
+  # MCP Servers are stdio-based and don't expose HTTP metrics
+  # Commenting out until we implement proper metrics endpoints
+  # - job_name: 'mcp-servers'
+  #   static_configs:
+  #     - targets: ['prometheus-mcp:8000', 'neo4j-mcp:8001']
+
+  # Agent Web Interface doesn't expose metrics endpoint yet
+  # - job_name: 'agent-web'
+  #   static_configs:
+  #     - targets: ['agent-web:5000']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093

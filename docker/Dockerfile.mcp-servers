@@ -1,0 +1,63 @@
+# Multi-stage Dockerfile for MCP Servers
+FROM python:3.11-slim as base
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy MCP server requirements
+COPY mcp_servers/requirements.txt /app/requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy MCP server source code
+COPY mcp_servers/ /app/
+
+# Set environment variables
+ENV PYTHONPATH=/app
+
+# Neo4j MCP Server Stage
+FROM base as neo4j-mcp
+
+EXPOSE 8001
+
+# Health check for Neo4j MCP - check if process is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD pgrep -f "neo4j_server.py" || exit 1
+
+# Start Neo4j MCP server with stdio handling - keep container alive with infinite sleep
+CMD ["sh", "-c", "python3 neo4j_server.py < /dev/null & sleep infinity"]
+
+# Prometheus MCP Server Stage  
+FROM base as prometheus-mcp
+
+EXPOSE 8000
+
+# Health check for Prometheus MCP - check if process is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD pgrep -f "prometheus_server.py" || exit 1
+
+# Start Prometheus MCP server with stdio handling - keep container alive with infinite sleep
+CMD ["sh", "-c", "python3 prometheus_server.py < /dev/null & sleep infinity"]
+
+# Combined MCP Servers Stage (for running both in one container)
+FROM base as mcp-servers
+
+EXPOSE 8000 8001
+
+# Copy startup script
+COPY mcp_servers/start_mcp_servers.py /app/start_mcp_servers.py
+
+# Health check for combined servers
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python3 -c "import requests; requests.get('http://localhost:8000/health', timeout=5); requests.get('http://localhost:8001/health', timeout=5)"
+
+# Start both MCP servers
+CMD ["python3", "start_mcp_servers.py"]

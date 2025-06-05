@@ -1,0 +1,17 @@
+# MCP Server Dependencies
+# Required packages for running Prometheus and Neo4j MCP servers
+
+# Core MCP packages
+mcp
+
+# Prometheus dependencies
+requests
+prometheus-client
+
+# Neo4j dependencies  
+neo4j
+
+# Common dependencies
+pydantic
+python-dotenv
+structlog

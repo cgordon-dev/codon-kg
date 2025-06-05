@@ -7,10 +7,11 @@ from langgraph.graph import StateGraph, START, END
 import structlog
 import json
 
-from ..shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
-from ..shared.mcp_client import create_mcp_client
-from ..shared.llm_factory import LLMFactory
-from ..config.settings import get_config
+from shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
+from shared.mcp_client import create_mcp_client
+from shared.llm_factory import LLMFactory
+from shared.langsmith_tracing import get_tracer, create_langsmith_tags, create_langsmith_metadata
+from config.settings import get_config
 from .tools import Neo4jConfig
 
 logger = structlog.get_logger(__name__)
@@ -27,7 +28,7 @@ class Neo4jAgent(BaseAgent):
             }
         )
         global_config = get_config()
-        self.model = LLMFactory.create_llm(global_config.llm)
+        self.model = LLMFactory.create_llm(global_config.llm, global_config.langsmith)
         self._mcp_tools = None
     
     def __del__(self):
@@ -196,12 +197,29 @@ When analyzing results:
     
     def run(self, user_input: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Execute the Neo4j knowledge graph agent with user input."""
+        # Setup LangSmith session for this run
+        tracer = get_tracer()
+        session_name = f"neo4j-agent-{hash(user_input) % 10000}"
+        
+        if tracer and tracer.is_enabled():
+            tracer.set_session(session_name)
+            self.logger.info("LangSmith session set", session=session_name)
+        
         try:
             graph = self.build_graph()
             initial_state = self.get_initial_state()
             
             if context:
                 initial_state["context"].update(context)
+            
+            # Add LangSmith metadata
+            langsmith_metadata = create_langsmith_metadata({
+                "agent": "neo4j",
+                "query": user_input[:100],  # Truncate for metadata
+                "session": session_name,
+                "context_keys": list(context.keys()) if context else []
+            })
+            initial_state["metadata"].update(langsmith_metadata)
             
             inputs = {
                 "messages": [HumanMessage(content=user_input)],
@@ -211,24 +229,40 @@ When analyzing results:
                 "max_retries": self.config.max_retries
             }
             
-            self.logger.info("Starting Neo4j agent execution", input=user_input)
+            self.logger.info("Starting Neo4j agent execution", 
+                           input=user_input, 
+                           session=session_name)
             
             result = graph.invoke(inputs)
             
-            return {
+            response_data = {
                 "status": "success",
                 "response": result["messages"][-1].content if result["messages"] else "No response",
                 "metadata": result.get("metadata", {}),
-                "context": result.get("context", {})
+                "context": result.get("context", {}),
+                "langsmith_session": session_name if tracer and tracer.is_enabled() else None
             }
             
+            self.logger.info("Neo4j agent execution completed", 
+                           status="success", 
+                           session=session_name)
+            
+            return response_data
+            
         except Exception as e:
-            self.logger.error("Neo4j agent execution failed", error=str(e))
+            self.logger.error("Neo4j agent execution failed", 
+                            error=str(e), 
+                            session=session_name)
             return {
                 "status": "error",
                 "error": str(e),
-                "response": "I encountered an error while processing your request."
+                "response": "I encountered an error while processing your request.",
+                "langsmith_session": session_name if tracer and tracer.is_enabled() else None
             }
+        finally:
+            # Clear session after execution
+            if tracer and tracer.is_enabled():
+                tracer.clear_session()
     
     def close(self):
         """Close the Neo4j connection."""

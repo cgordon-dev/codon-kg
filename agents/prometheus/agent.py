@@ -6,10 +6,10 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.graph import StateGraph, START, END
 import structlog
 
-from ..shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
-from ..shared.mcp_client import create_mcp_client
-from ..shared.llm_factory import LLMFactory
-from ..config.settings import get_config
+from shared.base_agent import BaseAgent, AgentConfig, BaseAgentState
+from shared.mcp_client import create_mcp_client
+from shared.llm_factory import LLMFactory
+from config.settings import get_config
 from .tools import PrometheusConfig
 
 logger = structlog.get_logger(__name__)
@@ -26,7 +26,7 @@ class PrometheusAgent(BaseAgent):
             neo4j_config={}  # Not used in Prometheus agent
         )
         global_config = get_config()
-        self.model = LLMFactory.create_llm(global_config.llm)
+        self.model = LLMFactory.create_llm(global_config.llm, global_config.langsmith)
         self._mcp_tools = None
     
     async def get_mcp_tools(self) -> List[Any]:

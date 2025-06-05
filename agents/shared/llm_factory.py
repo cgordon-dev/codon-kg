@@ -6,7 +6,8 @@ from typing import Any
 import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
-from config.settings import LLMConfig
+from config.settings import LLMConfig, LangSmithConfig
+from .langsmith_tracing import setup_langsmith, LangSmithTracer, set_tracer
 
 logger = structlog.get_logger(__name__)
 
@@ -14,12 +15,13 @@ class LLMFactory:
     """Factory for creating LLM instances based on provider configuration."""
     
     @staticmethod
-    def create_llm(config: LLMConfig) -> BaseLanguageModel:
+    def create_llm(config: LLMConfig, langsmith_config: LangSmithConfig = None) -> BaseLanguageModel:
         """
         Create an LLM instance based on the provider configuration.
         
         Args:
             config: LLM configuration containing provider, model, and API keys
+            langsmith_config: Optional LangSmith configuration for tracing
             
         Returns:
             BaseLanguageModel: Configured LLM instance
@@ -28,6 +30,13 @@ class LLMFactory:
             ValueError: If provider is not supported or API key is missing
             ImportError: If required package is not installed
         """
+        # Setup LangSmith tracing if configured
+        if langsmith_config:
+            tracer = LangSmithTracer(langsmith_config)
+            set_tracer(tracer)
+            if tracer.is_enabled():
+                logger.info("LangSmith tracing enabled for LLM", project=langsmith_config.project)
+        
         provider = config.provider.lower()
         
         if provider == "openai":

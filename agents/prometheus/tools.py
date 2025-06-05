@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
-from ..shared.security import audit_log, require_security_check
+from shared.security import audit_log, require_security_check
 
 logger = structlog.get_logger(__name__)
 
